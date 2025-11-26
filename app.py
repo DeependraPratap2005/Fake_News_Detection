@@ -17,10 +17,10 @@ import re
 import requests, json
 
 # ---------------------------
-# Configuration
+# Configuration (UPDATED FOR DEPLOYMENT)
 # ---------------------------
-MODEL_PATH = r"C:\Users\sachi\Fake_News_Detection\news_model.pkl"
-VECTORIZER_PATH = r"C:\Users\sachi\Fake_News_Detection\tfidf.pkl"
+MODEL_PATH = "news_model.pkl"
+VECTORIZER_PATH = "tfidf.pkl"
 
 DEFAULT_FAKE = "Fake.csv"
 DEFAULT_TRUE = "True.csv"
@@ -126,23 +126,21 @@ st.sidebar.markdown(
 )
 
 # ---------------------------
-# Load Model + Vectorizer
+# Load Model + Vectorizer  (UPDATED)
 # ---------------------------
 model, vectorizer = None, None
 
-if os.path.exists(MODEL_PATH):
-    try:
-        with open(MODEL_PATH, "rb") as f:
-            model = pickle.load(f)
-    except Exception:
-        pass
+try:
+    with open(MODEL_PATH, "rb") as f:
+        model = pickle.load(f)
+except:
+    model = None
 
-if os.path.exists(VECTORIZER_PATH):
-    try:
-        with open(VECTORIZER_PATH, "rb") as f:
-            vectorizer = pickle.load(f)
-    except Exception:
-        pass
+try:
+    with open(VECTORIZER_PATH, "rb") as f:
+        vectorizer = pickle.load(f)
+except:
+    vectorizer = None
 
 # ---------------------------
 # Cleaning Function
@@ -224,7 +222,7 @@ elif page == "Bulk Predict":
 
     uploaded = st.file_uploader("Upload CSV:", type=["csv"])
     if uploaded:
-        # FIX UnicodeDecodeError
+
         df = pd.read_csv(uploaded, encoding="latin1", on_bad_lines="skip")
 
         text_cols = df.select_dtypes(include='object').columns.tolist()
@@ -247,42 +245,16 @@ elif page == "Bulk Predict":
                     st.success("Prediction Completed ✔")
                     st.dataframe(df.head(50))
 
-                    # --------------------- GRAPHS ---------------------
-
                     st.subheader("📊 Fake vs Real Count")
-
                     fig1, ax1 = plt.subplots(figsize=(5,4))
                     sns.countplot(x=df['label'], ax=ax1)
-                    ax1.set_title("Fake vs Real News Count")
-                    ax1.set_xlabel("Label")
-                    ax1.set_ylabel("Count")
                     st.pyplot(fig1)
 
-                    # Word Count Distribution
                     st.subheader("✍ Word Count Distribution")
                     df['word_count'] = df['clean'].apply(lambda x: len(x.split()))
-
                     fig2, ax2 = plt.subplots(figsize=(6,4))
                     sns.histplot(df['word_count'], bins=30, ax=ax2)
-                    ax2.set_title("Word Count Distribution")
-                    ax2.set_xlabel("Word Count")
-                    ax2.set_ylabel("Frequency")
                     st.pyplot(fig2)
-
-                    # Confusion Matrix Heatmap
-                    st.subheader("📉 Confusion Matrix")
-
-                    if 'label_true' in df.columns:  
-                        cm = confusion_matrix(df['label_true'], df['prediction'])
-
-                        fig3, ax3 = plt.subplots(figsize=(5,4))
-                        sns.heatmap(cm, annot=True, fmt='d', cmap="Blues", ax=ax3)
-                        ax3.set_title("Confusion Matrix")
-                        ax3.set_xlabel("Predicted")
-                        ax3.set_ylabel("Actual")
-                        st.pyplot(fig3)
-                    else:
-                        st.info("True labels not found, confusion matrix skipped.")
 
 # ----------------------------------------------------------
 # PAGE 4: ABOUT
