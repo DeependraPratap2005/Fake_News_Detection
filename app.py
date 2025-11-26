@@ -1,6 +1,4 @@
 # ---------------------------------------------------------
-# app.py — Final Glass + Light UI Fake News Detection App
-# Developed by: Deependra Pratap Singh
 # ---------------------------------------------------------
 
 import streamlit as st
@@ -27,23 +25,12 @@ st.set_page_config(
 # ---------------------------
 # CSS
 # ---------------------------
-css = """
+st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700;800&display=swap');
 html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
-[data-testid="stAppViewContainer"] { background: linear-gradient(135deg, #ffffff 0%, #e8f4ff 40%, #d9ecff 100%); background-size: cover; background-attachment: fixed; }
-.block-container { background: rgba(255, 255, 255, 0.6) !important; border: 1px solid rgba(0,0,0,0.1) !important; border-radius: 20px; backdrop-filter: blur(12px) saturate(180%); box-shadow: 0 15px 30px rgba(0,0,0,0.08); padding: 35px !important; }
-.big-title { color: #003b5c; font-size: 42px; font-weight: 800; letter-spacing: 1px; text-shadow: 0 2px 8px rgba(0,0,0,0.18); margin-bottom: 8px; }
-.sidebar-name { position: fixed; bottom: 12px; left: 15px; font-size: 14px; color: #002d47; font-weight: 800; background: rgba(255,255,255,0.7); padding:6px 10px; border-radius: 10px; border: 1px solid rgba(0,0,0,0.12); }
-.footer { display: none !important; }
-.stButton>button { background: linear-gradient(90deg,#009dff,#4bb8ff); border: none; color: white; font-weight: 800; padding: 10px 22px; border-radius: 10px; }
-.stButton>button:hover { transform: translateY(-3px); box-shadow: 0 8px 25px rgba(0,150,255,0.28); }
-.stRadio > div { gap: 12px !important; }
-.stRadio label { background: rgba(255,255,255,0.8); color: #003b5c; padding: 12px; font-weight: 700; border-radius: 12px; border: 1px solid rgba(0,0,0,0.15); transition: 0.25s; text-align: center; }
-.stRadio input:checked + label { background: linear-gradient(90deg, #009dff, #4bb8ff); color: white !important; font-weight: 800; }
+.big-title { color: #003b5c; font-size: 42px; font-weight: 800; }
 </style>
-"""
-st.markdown(css, unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ---------------------------
 # Sidebar Navigation
@@ -60,7 +47,6 @@ st.sidebar.markdown(
 # Load Model + Vectorizer
 # ---------------------------
 model, vectorizer = None, None
-
 try:
     with open(MODEL_PATH, "rb") as f:
         model = pickle.load(f)
@@ -91,7 +77,7 @@ def clean_text(text):
 def translate_to_english(text):
     try:
         url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={text}"
-        response = requests.get(url)
+        response = requests.get(url, timeout=5)
         result = json.loads(response.text)
         return result[0][0][0]
     except:
@@ -102,12 +88,11 @@ def translate_to_english(text):
 # ----------------------------------------------------------
 if page == "Home":
     st.markdown("<div class='big-title'>📰 Fake News Detection</div>", unsafe_allow_html=True)
-    st.write("Detect Fake News using Machine Learning with TF-IDF + Logistic Regression/SVM. Supports **Hindi + 100 languages**.")
-    st.info("Model status:")
+    st.write("Detect Fake News using Machine Learning with TF-IDF + Logistic Regression/SVM. Supports multiple languages.")
     if model and vectorizer:
         st.success("Model & Vectorizer Loaded Successfully ✔")
     else:
-        st.warning("Model missing — Train or upload first.")
+        st.warning("Model or Vectorizer missing!")
 
 # ----------------------------------------------------------
 # PAGE 2: Predict Single
@@ -134,7 +119,7 @@ elif page == "Predict Single":
             st.success("✔ REAL NEWS" if pred == 1 else "✖ FAKE NEWS")
 
 # ----------------------------------------------------------
-# PAGE 3: Bulk Predict
+# PAGE 3: Bulk Predict with Auto Graphs
 # ----------------------------------------------------------
 elif page == "Bulk Predict":
     st.markdown("<div class='big-title'>📂 Bulk Prediction</div>", unsafe_allow_html=True)
@@ -174,28 +159,44 @@ elif page == "Bulk Predict":
                     # Show full dataframe
                     st.dataframe(df)
 
-                    # --------------------- DYNAMIC GRAPHS ---------------------
-                    st.subheader("📊 Graphs by Column")
-                    all_cols = df.columns.tolist()
-                    all_cols.remove("clean")
-                    all_cols.remove("translated")
-                    all_cols.remove("prediction")
-                    all_cols.remove("label")
+                    # --------------------- AUTO GRAPHS ---------------------
+                    st.subheader("📊 Auto Graphs After Prediction")
 
-                    col_to_plot = st.selectbox("Select column to plot", all_cols)
+                    # 1️⃣ Label distribution
+                    st.write("### Overall Real vs Fake Count")
+                    fig, ax = plt.subplots(figsize=(5,4))
+                    sns.countplot(x="label", data=df, ax=ax)
+                    st.pyplot(fig)
+                    plt.close(fig)
 
-                    if col_to_plot:
-                        if df[col_to_plot].dtype == "object":
-                            st.write(f"Count plot of {col_to_plot} with prediction labels")
+                    # 2️⃣ Word count distribution
+                    df["word_count"] = df["clean"].apply(lambda x: len(x.split()))
+                    st.write("### Word Count Distribution")
+                    fig, ax = plt.subplots(figsize=(6,4))
+                    sns.histplot(df["word_count"], bins=30, kde=True, ax=ax)
+                    st.pyplot(fig)
+                    plt.close(fig)
+
+                    # 3️⃣ Auto categorical column plots vs label
+                    cat_cols = df.select_dtypes(include="object").columns.tolist()
+                    for c in cat_cols:
+                        if c not in ["translated","clean"]:
+                            st.write(f"### Count plot: {c} vs Label")
                             fig, ax = plt.subplots(figsize=(6,4))
-                            sns.countplot(x=col_to_plot, hue="label", data=df, ax=ax)
-                            ax.set_title(f"{col_to_plot} vs Label")
+                            sns.countplot(x=c, hue="label", data=df, ax=ax)
+                            plt.xticks(rotation=45)
                             st.pyplot(fig)
-                        else:
-                            st.write(f"Distribution plot of {col_to_plot} grouped by prediction labels")
+                            plt.close(fig)
+
+                    # 4️⃣ Auto numeric column plots vs label
+                    num_cols = df.select_dtypes(include=["int64","float64"]).columns.tolist()
+                    for c in num_cols:
+                        if c not in ["prediction"]:
+                            st.write(f"### Distribution plot: {c} grouped by Label")
                             fig, ax = plt.subplots(figsize=(6,4))
-                            sns.histplot(data=df, x=col_to_plot, hue="label", bins=30, kde=True, ax=ax)
+                            sns.histplot(data=df, x=c, hue="label", bins=30, kde=True, ax=ax)
                             st.pyplot(fig)
+                            plt.close(fig)
 
 # ----------------------------------------------------------
 # PAGE 4: ABOUT
@@ -208,8 +209,5 @@ elif page == "About":
         - Logistic Regression / SVM / Naive Bayes  
         - Auto-Translation (Any Language → English)  
         - Streamlit UI Dashboard  
+        - Automatic post-prediction graphs for easy visualization
     """)
-
-# ----------------------------------------------------------
-# END
-# ----------------------------------------------------------
