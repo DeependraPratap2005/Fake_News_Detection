@@ -5,11 +5,9 @@
 
 import streamlit as st
 import pickle
-import os
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
-from sklearn.metrics import confusion_matrix
 from sklearn.feature_extraction.text import TfidfVectorizer
 import re
 import requests, json
@@ -48,7 +46,7 @@ html, body, [class*="css"] { font-family: 'Poppins', sans-serif; }
 st.markdown(css, unsafe_allow_html=True)
 
 # ---------------------------
-# Sidebar
+# Sidebar Navigation
 # ---------------------------
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("", ("Home", "Predict Single", "Bulk Predict", "About"))
@@ -76,7 +74,7 @@ except:
     vectorizer = None
 
 # ---------------------------
-# Cleaning Function
+# Text Cleaning
 # ---------------------------
 def clean_text(text):
     if pd.isna(text):
@@ -88,14 +86,11 @@ def clean_text(text):
     return t
 
 # ---------------------------
-# Translation Function
+# Translate to English
 # ---------------------------
 def translate_to_english(text):
     try:
-        url = (
-            "https://translate.googleapis.com/translate_a/single"
-            "?client=gtx&sl=auto&tl=en&dt=t&q=" + text
-        )
+        url = f"https://translate.googleapis.com/translate_a/single?client=gtx&sl=auto&tl=en&dt=t&q={text}"
         response = requests.get(url)
         result = json.loads(response.text)
         return result[0][0][0]
@@ -152,9 +147,7 @@ elif page == "Bulk Predict":
         if not text_cols:
             st.error("No text column found.")
         else:
-            col = st.selectbox("Select text column for prediction:", text_cols)
-
-            # Optional translation
+            col = st.selectbox("Select text column:", text_cols)
             use_translation = st.checkbox("Enable Translation (Slow for large files)", value=False)
 
             if st.button("Run Prediction"):
@@ -163,7 +156,7 @@ elif page == "Bulk Predict":
                 else:
                     # Translation
                     if use_translation:
-                        st.warning("Translation ON — may take time for large files.")
+                        st.warning("Translation ON — This may take time for large files.")
                         df["translated"] = df[col].astype(str).apply(translate_to_english)
                     else:
                         df["translated"] = df[col].astype(str)
@@ -177,55 +170,32 @@ elif page == "Bulk Predict":
                     df["label"] = df["prediction"].map({0: "FAKE", 1: "REAL"})
 
                     st.success("Prediction Completed ✔")
+
+                    # Show full dataframe
                     st.dataframe(df)
 
-                    # --------------------- AUTO GRAPH OPTIONS ---------------------
-                    st.subheader("📊 Select Graph to Display")
-                    possible_graphs = []
+                    # --------------------- DYNAMIC GRAPHS ---------------------
+                    st.subheader("📊 Graphs by Column")
+                    all_cols = df.columns.tolist()
+                    all_cols.remove("clean")
+                    all_cols.remove("translated")
+                    all_cols.remove("prediction")
+                    all_cols.remove("label")
 
-                    # Count plots for categorical columns
-                    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
-                    cat_cols.remove("translated") if "translated" in cat_cols else None
-                    cat_cols.remove("clean") if "clean" in cat_cols else None
-                    cat_cols.remove("label") if "label" in cat_cols else None
-                    if cat_cols:
-                        possible_graphs.append("Count Plot by Column vs Label")
+                    col_to_plot = st.selectbox("Select column to plot", all_cols)
 
-                    # Numeric columns
-                    num_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
-                    if "word_count" not in df.columns:
-                        df["word_count"] = df["clean"].apply(lambda x: len(x.split()))
-                    possible_graphs.append("Word Count Distribution")
-                    if num_cols:
-                        possible_graphs.append("Numeric Column Distribution")
-
-                    graph_choice = st.selectbox("Select Graph:", possible_graphs)
-
-                    # --------------------- DISPLAY SELECTED GRAPH ---------------------
-                    if graph_choice == "Count Plot by Column vs Label":
-                        col_for_plot = st.selectbox("Select Categorical Column:", cat_cols)
-                        fig, ax = plt.subplots(figsize=(6,4))
-                        sns.countplot(x=df[col_for_plot], hue=df["label"], ax=ax)
-                        ax.set_title(f"{col_for_plot} vs Label")
-                        ax.set_xlabel(col_for_plot)
-                        ax.set_ylabel("Count")
-                        st.pyplot(fig)
-
-                    elif graph_choice == "Word Count Distribution":
-                        fig, ax = plt.subplots(figsize=(6,4))
-                        sns.histplot(df["word_count"], bins=30, kde=True, ax=ax)
-                        ax.set_title("Word Count Distribution")
-                        ax.set_xlabel("Word Count")
-                        ax.set_ylabel("Frequency")
-                        st.pyplot(fig)
-
-                    elif graph_choice == "Numeric Column Distribution":
-                        num_col_plot = st.selectbox("Select Numeric Column:", num_cols)
-                        fig, ax = plt.subplots(figsize=(6,4))
-                        sns.histplot(df[num_col_plot], bins=30, kde=True, ax=ax, hue=df["label"])
-                        ax.set_title(f"{num_col_plot} Distribution by Label")
-                        st.pyplot(fig)
-
+                    if col_to_plot:
+                        if df[col_to_plot].dtype == "object":
+                            st.write(f"Count plot of {col_to_plot} with prediction labels")
+                            fig, ax = plt.subplots(figsize=(6,4))
+                            sns.countplot(x=col_to_plot, hue="label", data=df, ax=ax)
+                            ax.set_title(f"{col_to_plot} vs Label")
+                            st.pyplot(fig)
+                        else:
+                            st.write(f"Distribution plot of {col_to_plot} grouped by prediction labels")
+                            fig, ax = plt.subplots(figsize=(6,4))
+                            sns.histplot(data=df, x=col_to_plot, hue="label", bins=30, kde=True, ax=ax)
+                            st.pyplot(fig)
 
 # ----------------------------------------------------------
 # PAGE 4: ABOUT
@@ -243,4 +213,3 @@ elif page == "About":
 # ----------------------------------------------------------
 # END
 # ----------------------------------------------------------
-
