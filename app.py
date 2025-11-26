@@ -130,7 +130,7 @@ elif page == "Predict Single":
             st.success("✔ REAL NEWS" if pred == 1 else "✖ FAKE NEWS")
 
 # ----------------------------------------------------------
-# PAGE 3: Bulk Predict with Auto Graphs
+# PAGE 3: Bulk Predict with Separate Graphs
 # ----------------------------------------------------------
 elif page == "Bulk Predict":
     st.markdown("<div class='big-title'>📂 Bulk Prediction</div>", unsafe_allow_html=True)
@@ -150,7 +150,7 @@ elif page == "Bulk Predict":
                 if not model or not vectorizer:
                     st.error("Model or vectorizer missing.")
                 else:
-                    # Translation
+                    # Translation (optional)
                     if use_translation:
                         st.warning("Translation ON — This may take time for large files.")
                         df["translated"] = df[col].astype(str).apply(translate_to_english)
@@ -168,26 +168,112 @@ elif page == "Bulk Predict":
                     st.success("Prediction Completed ✔")
                     st.dataframe(df)  # Show full dataframe
 
-                    # --------------------- AUTO GRAPHS ---------------------
-                    st.subheader("📊 Graphs Automatically Generated")
+                    # --------------------- SEPARATE GRAPHS ---------------------
+                    st.subheader("📊 Separate Analysis Graphs")
 
-                    for c in df.columns:
-                        if c in ["clean", "translated", "prediction", "label"]:
-                            continue
+                    # helper to limit to top N categories for plotting
+                    def top_n_df(series, n=10):
+                        top = series.value_counts().nlargest(n).index
+                        return series.where(series.isin(top))
+
+                    # 1) Label Distribution
+                    st.markdown("### 🔹 1. Fake vs Real Distribution")
+                    try:
+                        fig, ax = plt.subplots(figsize=(6, 4))
+                        sns.countplot(x="label", data=df, ax=ax)
+                        ax.set_title("Fake vs Real News Count")
+                        ax.set_xlabel("")
+                        st.pyplot(fig)
+                        plt.close(fig)
+                    except Exception:
+                        st.info("Could not render Label distribution.")
+
+                    # 2) Category vs Label (top 10 categories)
+                    if "Category" in df.columns:
+                        st.markdown("### 🔹 2. Category-wise Fake vs Real (Top categories)")
                         try:
-                            fig, ax = plt.subplots(figsize=(6,4))
-                            if df[c].dtype == "object":
-                                sns.countplot(x=c, hue="label", data=df, ax=ax)
-                                ax.set_title(f"{c} vs Label")
-                            else:
-                                sns.histplot(data=df, x=c, hue="label", bins=30, kde=True, ax=ax)
-                                ax.set_title(f"{c} distribution grouped by Label")
+                            plot_col = "Category"
+                            tmp = df.copy()
+                            tmp[plot_col] = top_n_df(tmp[plot_col], n=10)
+                            fig, ax = plt.subplots(figsize=(8, 4))
+                            sns.countplot(x=plot_col, hue="label", data=tmp, order=tmp[plot_col].value_counts().nlargest(10).index, ax=ax)
                             plt.xticks(rotation=45)
-                            plt.tight_layout()
+                            ax.set_title("Category vs Label (Top 10)")
                             st.pyplot(fig)
                             plt.close(fig)
-                        except:
-                            continue
+                        except Exception:
+                            st.info("Could not render Category vs Label.")
+
+                    # 3) Website Source vs Label (top 10)
+                    if "Web" in df.columns:
+                        st.markdown("### 🔹 3. Website Source-wise Fake vs Real (Top sources)")
+                        try:
+                            plot_col = "Web"
+                            tmp = df.copy()
+                            tmp[plot_col] = top_n_df(tmp[plot_col], n=10)
+                            fig, ax = plt.subplots(figsize=(8, 4))
+                            sns.countplot(x=plot_col, hue="label", data=tmp, order=tmp[plot_col].value_counts().nlargest(10).index, ax=ax)
+                            plt.xticks(rotation=45)
+                            ax.set_title("Web Source vs Label (Top 10)")
+                            st.pyplot(fig)
+                            plt.close(fig)
+                        except Exception:
+                            st.info("Could not render Web vs Label.")
+
+                    # 4) Category Distribution (Top 10)
+                    if "Category" in df.columns:
+                        st.markdown("### 🔹 4. Category Distribution (Top categories)")
+                        try:
+                            fig, ax = plt.subplots(figsize=(6, 4))
+                            df_cat = df["Category"].value_counts().nlargest(10)
+                            sns.barplot(x=df_cat.values, y=df_cat.index, ax=ax)
+                            ax.set_title("Top Categories")
+                            ax.set_xlabel("Count")
+                            st.pyplot(fig)
+                            plt.close(fig)
+                        except Exception:
+                            st.info("Could not render Category distribution.")
+
+                    # 5) Website Distribution (Top 10)
+                    if "Web" in df.columns:
+                        st.markdown("### 🔹 5. Website Source Distribution (Top sources)")
+                        try:
+                            fig, ax = plt.subplots(figsize=(6, 4))
+                            df_web = df["Web"].value_counts().nlargest(10)
+                            sns.barplot(x=df_web.values, y=df_web.index, ax=ax)
+                            ax.set_title("Top Web Sources")
+                            ax.set_xlabel("Count")
+                            st.pyplot(fig)
+                            plt.close(fig)
+                        except Exception:
+                            st.info("Could not render Web distribution.")
+
+                    # 6) Time Trend: Fake vs Real Over Time
+                    if "Date" in df.columns:
+                        st.markdown("### 🔹 6. Fake vs Real Over Time (Monthly)")
+                        try:
+                            # parse dates safely
+                            df["Date_clean"] = pd.to_datetime(df["Date"], errors="coerce")
+                            # drop null dates
+                            df_time = df.dropna(subset=["Date_clean"]).copy()
+                            if not df_time.empty:
+                                # group by month
+                                df_time["month"] = df_time["Date_clean"].dt.to_period("M").dt.to_timestamp()
+                                trend = df_time.groupby(["month", "label"]).size().unstack(fill_value=0)
+                                # plot
+                                fig, ax = plt.subplots(figsize=(10, 4))
+                                trend.plot(ax=ax)
+                                ax.set_title("Fake vs Real Trend Over Time (by month)")
+                                ax.set_xlabel("Month")
+                                ax.set_ylabel("Count")
+                                plt.xticks(rotation=45)
+                                plt.tight_layout()
+                                st.pyplot(fig)
+                                plt.close(fig)
+                            else:
+                                st.info("No valid Date values to plot time trend.")
+                        except Exception:
+                            st.info("Date column format invalid for time graph.")
 
 # ----------------------------------------------------------
 # PAGE 4: ABOUT
@@ -199,6 +285,6 @@ elif page == "About":
         - TF-IDF Vectorization  
         - Logistic Regression / SVM / Naive Bayes  
         - Auto-Translation (Any Language → English)  
-        - Automatic Graphs after Prediction  
+        - Separate Analysis Graphs (Category, Source, Time, Label)  
         - Streamlit UI Dashboard  
     """)
