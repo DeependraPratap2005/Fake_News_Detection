@@ -152,15 +152,10 @@ elif page == "Bulk Predict":
         if not text_cols:
             st.error("No text column found.")
         else:
-            col = st.selectbox("Select text column:", text_cols)
+            col = st.selectbox("Select text column for prediction:", text_cols)
 
             # Optional translation
             use_translation = st.checkbox("Enable Translation (Slow for large files)", value=False)
-
-            compare_cols = st.multiselect(
-                "Select columns for comparison graphs (count/distribution):",
-                options=df.columns.tolist()
-            )
 
             if st.button("Run Prediction"):
                 if not model or not vectorizer:
@@ -168,7 +163,7 @@ elif page == "Bulk Predict":
                 else:
                     # Translation
                     if use_translation:
-                        st.warning("Translation ON — This may take time for large files.")
+                        st.warning("Translation ON — may take time for large files.")
                         df["translated"] = df[col].astype(str).apply(translate_to_english)
                     else:
                         df["translated"] = df[col].astype(str)
@@ -182,20 +177,55 @@ elif page == "Bulk Predict":
                     df["label"] = df["prediction"].map({0: "FAKE", 1: "REAL"})
 
                     st.success("Prediction Completed ✔")
-
-                    # Show full dataframe
                     st.dataframe(df)
 
-                    # --------------------- GRAPHS ---------------------
-                    if compare_cols:
-                        for c in compare_cols:
-                            st.subheader(f"📊 Count Plot for {c}")
-                            fig, ax = plt.subplots(figsize=(6,4))
-                            sns.countplot(x=df[c], hue=df["label"], ax=ax)
-                            ax.set_title(f"{c} vs Label")
-                            ax.set_xlabel(c)
-                            ax.set_ylabel("Count")
-                            st.pyplot(fig)
+                    # --------------------- AUTO GRAPH OPTIONS ---------------------
+                    st.subheader("📊 Select Graph to Display")
+                    possible_graphs = []
+
+                    # Count plots for categorical columns
+                    cat_cols = df.select_dtypes(include=["object", "category"]).columns.tolist()
+                    cat_cols.remove("translated") if "translated" in cat_cols else None
+                    cat_cols.remove("clean") if "clean" in cat_cols else None
+                    cat_cols.remove("label") if "label" in cat_cols else None
+                    if cat_cols:
+                        possible_graphs.append("Count Plot by Column vs Label")
+
+                    # Numeric columns
+                    num_cols = df.select_dtypes(include=["int64", "float64"]).columns.tolist()
+                    if "word_count" not in df.columns:
+                        df["word_count"] = df["clean"].apply(lambda x: len(x.split()))
+                    possible_graphs.append("Word Count Distribution")
+                    if num_cols:
+                        possible_graphs.append("Numeric Column Distribution")
+
+                    graph_choice = st.selectbox("Select Graph:", possible_graphs)
+
+                    # --------------------- DISPLAY SELECTED GRAPH ---------------------
+                    if graph_choice == "Count Plot by Column vs Label":
+                        col_for_plot = st.selectbox("Select Categorical Column:", cat_cols)
+                        fig, ax = plt.subplots(figsize=(6,4))
+                        sns.countplot(x=df[col_for_plot], hue=df["label"], ax=ax)
+                        ax.set_title(f"{col_for_plot} vs Label")
+                        ax.set_xlabel(col_for_plot)
+                        ax.set_ylabel("Count")
+                        st.pyplot(fig)
+
+                    elif graph_choice == "Word Count Distribution":
+                        fig, ax = plt.subplots(figsize=(6,4))
+                        sns.histplot(df["word_count"], bins=30, kde=True, ax=ax)
+                        ax.set_title("Word Count Distribution")
+                        ax.set_xlabel("Word Count")
+                        ax.set_ylabel("Frequency")
+                        st.pyplot(fig)
+
+                    elif graph_choice == "Numeric Column Distribution":
+                        num_col_plot = st.selectbox("Select Numeric Column:", num_cols)
+                        fig, ax = plt.subplots(figsize=(6,4))
+                        sns.histplot(df[num_col_plot], bins=30, kde=True, ax=ax, hue=df["label"])
+                        ax.set_title(f"{num_col_plot} Distribution by Label")
+                        st.pyplot(fig)
+
 
 # ----------------------------------------------------------
 # PAGE 4: ABOUT
@@ -213,3 +243,4 @@ elif page == "About":
 # ----------------------------------------------------------
 # END
 # ----------------------------------------------------------
+
