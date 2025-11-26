@@ -115,7 +115,7 @@ html, body, [class*="css"] {
 st.markdown(css, unsafe_allow_html=True)
 
 # ---------------------------
-# Sidebar
+# Sidebar Navigation
 # ---------------------------
 st.sidebar.title("Navigation")
 page = st.sidebar.radio("", ("Home", "Predict Single", "Bulk Predict", "About"))
@@ -126,7 +126,7 @@ st.sidebar.markdown(
 )
 
 # ---------------------------
-# Load Model + Vectorizer  (UPDATED)
+# Load Model + Vectorizer
 # ---------------------------
 model, vectorizer = None, None
 
@@ -146,12 +146,12 @@ except:
 # Cleaning Function
 # ---------------------------
 def clean_text(text):
-    if pd.isna(text): 
+    if pd.isna(text):
         return ""
     t = str(text).lower()
-    t = re.sub(r"http\S+|www\S+","",t)
-    t = re.sub(r"[^a-zA-Z\s]"," ",t)
-    t = re.sub(r"\s+"," ",t).strip()
+    t = re.sub(r"http\S+|www\S+", "", t)
+    t = re.sub(r"[^a-zA-Z\s]", " ", t)
+    t = re.sub(r"\s+", " ", t).strip()
     return t
 
 # ---------------------------
@@ -215,7 +215,7 @@ elif page == "Predict Single":
                 st.error("✖ FAKE NEWS")
 
 # ----------------------------------------------------------
-# PAGE 3: Bulk Predict
+# PAGE 3: Bulk Predict (UPDATED FAST VERSION)
 # ----------------------------------------------------------
 elif page == "Bulk Predict":
     st.markdown("<div class='big-title'>📂 Bulk Prediction</div>", unsafe_allow_html=True)
@@ -225,35 +225,53 @@ elif page == "Bulk Predict":
 
         df = pd.read_csv(uploaded, encoding="latin1", on_bad_lines="skip")
 
-        text_cols = df.select_dtypes(include='object').columns.tolist()
+        text_cols = df.select_dtypes(include="object").columns.tolist()
 
         if not text_cols:
             st.error("No text column found.")
         else:
             col = st.selectbox("Select text column:", text_cols)
 
+            # 🔥 New Feature: Optional Translation
+            use_translation = st.checkbox(
+                "Enable Translation (Slow for large files)",
+                value=False
+            )
+
             if st.button("Run Prediction"):
                 if not model or not vectorizer:
                     st.error("Model or vectorizer missing.")
                 else:
-                    df['translated'] = df[col].apply(translate_to_english)
-                    df['clean'] = df['translated'].apply(clean_text)
-                    vect = vectorizer.transform(df['clean'])
-                    df['prediction'] = model.predict(vect)
-                    df['label'] = df['prediction'].map({0:'FAKE',1:'REAL'})
+
+                    # -------------------------
+                    # FAST TRANSLATE OPTION
+                    # -------------------------
+                    if use_translation:
+                        st.warning("Translation ON — This will be slow for large files!")
+                        df["translated"] = df[col].astype(str).apply(translate_to_english)
+                    else:
+                        df["translated"] = df[col].astype(str)
+
+                    # Clean text
+                    df["clean"] = df["translated"].apply(clean_text)
+
+                    # SUPER FAST vectorized prediction
+                    vect = vectorizer.transform(df["clean"])
+                    df["prediction"] = model.predict(vect)
+                    df["label"] = df["prediction"].map({0: "FAKE", 1: "REAL"})
 
                     st.success("Prediction Completed ✔")
                     st.dataframe(df.head(50))
 
                     st.subheader("📊 Fake vs Real Count")
-                    fig1, ax1 = plt.subplots(figsize=(5,4))
-                    sns.countplot(x=df['label'], ax=ax1)
+                    fig1, ax1 = plt.subplots(figsize=(5, 4))
+                    sns.countplot(x=df["label"], ax=ax1)
                     st.pyplot(fig1)
 
                     st.subheader("✍ Word Count Distribution")
-                    df['word_count'] = df['clean'].apply(lambda x: len(x.split()))
-                    fig2, ax2 = plt.subplots(figsize=(6,4))
-                    sns.histplot(df['word_count'], bins=30, ax=ax2)
+                    df["word_count"] = df["clean"].apply(lambda x: len(x.split()))
+                    fig2, ax2 = plt.subplots(figsize=(6, 4))
+                    sns.histplot(df["word_count"], bins=30, ax=ax2)
                     st.pyplot(fig2)
 
 # ----------------------------------------------------------
